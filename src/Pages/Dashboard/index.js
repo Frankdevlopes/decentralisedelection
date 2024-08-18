@@ -157,7 +157,7 @@ class Dashboard extends React.Component {
               },
             }}
           >
-            <Typography variant="h3">Vegan Rob's Governance Token</Typography>
+            <Typography variant="h3"> Governance Token</Typography>
             <Stack
               flexDirection={this.props.matchUpMd ? "row" : "column"}
               gap={this.props.matchDownLg ? 6 : 9}
@@ -242,7 +242,7 @@ class Dashboard extends React.Component {
             maxWidth: "100%",
           }}
         >
-          <Typography variant="h3">Members of Vegan Rob's DAO</Typography>
+          <Typography variant="h3">Members of the specified election </Typography>
           <Box
             sx={{
               pt: 3,

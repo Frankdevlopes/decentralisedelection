@@ -1,138 +1,76 @@
 import React from "react";
-import {
-  RPC,
-  vrtAddress,
-  vrtABI,
-  daoABI,
-  daoAddress,
-} from "../Constants/config";
-import Web3 from "web3";
+import { Server, Keypair, TransactionBuilder, Networks, Operation } from "stellar-sdk";
+import { rpcUrl, vrtContractId, daoContractId } from "../Constants/config";
 
-const web3 = new Web3(new Web3.providers.HttpProvider(RPC));
-const vrtContract = new web3.eth.Contract(vrtABI, vrtAddress);
-const daoContract = new web3.eth.Contract(daoABI, daoAddress);
+// Initialize the Stellar server
+const server = new Server(rpcUrl);
 
+// Initial State
 const initialState = {
-  web3: web3,
   account: "",
-  daoContract: daoContract,
-  vrtContract: vrtContract,
+  vrtContract: vrtContractId,
+  daoContract: daoContractId,
+  position: "GUEST",
 };
 
-const Web3Context = React.createContext({
+const StellarContext = React.createContext({
   ...initialState,
 });
 
-export const Web3Provider = ({ children }) => {
+export const StellarProvider = ({ children }) => {
   const [data, setData] = React.useState({ ...initialState });
 
   React.useEffect(() => {}, []);
 
   const walletConnect = async () => {
     try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: web3.utils.toHex(1666600000) }],
-      });
-    } catch (switchError) {
-      // This error code indicates that the chain has not been added to MetaMask.
-      if (switchError.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [
-              {
-                chainId: web3.utils.toHex(1666600000),
-                chainName: "Harmony Mainnet",
-                rpcUrls: ["https://api.harmony.one"],
-                nativeCurrency: {
-                  name: "ONE",
-                  symbol: "ONE", // 2-6 characters long
-                  decimals: 18,
-                },
-                blockExplorerUrls: "https://explorer.harmony.one/",
-              },
-            ],
-          });
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: web3.utils.toHex(1666600000) }],
-          });
-        } catch (addError) {}
-      }
+      const pair = Keypair.fromSecret("<Your Secret Key>"); // Replace with dynamic secret key handling
+      setData({ ...data, account: pair.publicKey() });
+
+      // Call a method to determine the user's position based on the contract logic
+      await getPosition(pair.publicKey());
+
+    } catch (error) {
+      console.error("Error connecting to Stellar wallet:", error);
     }
-
-    if (window.ethereum) {
-      window.web3 = new Web3(window.ethereum);
-      await window.ethereum.enable();
-      const clientWeb3 = window.web3;
-      const accounts = await clientWeb3.eth.getAccounts();
-      setData({ ...data, account: accounts[0] });
-      await this.getPosition(accounts[0]);
-    } else if (window.web3) {
-      window.web3 = new Web3(window.web3.currentProvider);
-      const clientWeb3 = window.web3;
-      const accounts = await clientWeb3.eth.getAccounts();
-      setData({ ...data, account: accounts[0] });
-      await this.getPosition(accounts[0]);
-    }
-
-    const { ethereum } = window;
-    ethereum.on("accountsChanged", async (accounts) => {
-      try {
-        accounts = web3.utils.toChecksumAddress(accounts + "");
-      } catch (err) {}
-
-      this.setState({
-        account: accounts,
-      });
-    });
-
-    ethereum.on("chainChanged", async (chainId) => {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: web3.utils.toHex(1666600000) }],
-      });
-    });
-
-    // this.checkDashBoard(this.state.linkedAccount)
   };
 
-  const getPosition = async (address) => {
-    const balance = await web3.vrtContract.methods.balanceOf(address).call();
-    const owner = await web3.web3.daoContract.methods.owner().call();
-    const admin = await web3.web3.daoContract.methods.admin().call();
+  const getPosition = async (publicKey) => {
+    // Logic to interact with the Stellar contracts and determine the user's position
+    const vrtBalance = await server.loadAccount(publicKey).then(account => {
+      // Retrieve VRT balance from account balances (assuming it's a token on Stellar)
+      const vrtBalanceObj = account.balances.find(balance => balance.asset_code === "VRT");
+      return vrtBalanceObj ? parseFloat(vrtBalanceObj.balance) : 0;
+    });
 
-    if (address === owner) {
-      this.setState({
+    // Assume you have stored contract data in a way compatible with Stellar
+    const daoContractOwner = await fetchDaoContractOwner(); // Implement this based on your contract
+
+    if (publicKey === daoContractOwner) {
+      setData({
+        ...data,
         position: "OWNER",
       });
-      this.props.dispatch({ type: "SET_POSITION", payload: "OWNER" });
-    } else if (address === admin) {
-      this.setState({
-        position: "ADMIN",
-      });
-      this.props.dispatch({ type: "SET_POSITION", payload: "ADMIN" });
     } else {
-      if (balance > 0) {
-        this.setState({
+      if (vrtBalance > 0) {
+        setData({
+          ...data,
           position: "MEMBER",
         });
-        this.props.dispatch({ type: "SET_POSITION", payload: "MEMBER" });
       } else {
-        this.setState({
+        setData({
+          ...data,
           position: "GUEST",
         });
-        this.props.dispatch({ type: "SET_POSITION", payload: "GUEST" });
       }
     }
   };
 
   return (
-    <Web3Context.Provider value={{ ...data, walletConnect }}>
+    <StellarContext.Provider value={{ ...data, walletConnect }}>
       {children}
-    </Web3Context.Provider>
+    </StellarContext.Provider>
   );
 };
 
-export default Web3Context;
+export default StellarContext;
